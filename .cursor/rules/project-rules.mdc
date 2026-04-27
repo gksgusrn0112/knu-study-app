@@ -1,0 +1,48 @@
+---
+description: KNUSTUDY 프로젝트의 React Native(Expo) 개발 및 코딩 스타일 가이드
+globs: **/*.{ts,tsx,js,jsx}
+---
+
+# KNUSTUDY 개발 가이드라인
+
+## 1. 프로젝트 특성 및 환경
+- **플랫폼**: Expo SDK 54 기반 React Native 애플리케이션
+- **라우팅**: Expo Router (File-based Routing) 사용 (`app` 폴더 구조 준수)
+- **사용자 경험**: 모바일 환경에 최적화된 로딩 상태, 빈 화면(Empty State), 에러 피드백 UI를 필수로 제공한다.
+- **언어**: 모든 사용자 메시지와 인터페이스는 **한글**을 기본으로 한다.
+
+## 2. 기술 스택
+- **Framework**: Expo SDK 54
+- **Language**: TypeScript (Strict Mode)
+- **Navigation**: Expo Router
+- **Backend/Auth**: Supabase (Auth, Database, Storage)
+- **AI Integration**: Google Gemini API
+- **State Management**: Zustand (전역 상태가 꼭 필요한 경우에만)
+- **Styling**: `StyleSheet.create` (React Native 기본 방식 우선)
+
+## 3. 코딩 스타일 및 규칙
+- **함수/컴포넌트 선언**: 모든 컴포넌트와 함수는 **화살표 함수(Arrow Function)** 로 작성한다.
+- **파일명 규칙**:
+  - **일반 컴포넌트**: 파스칼 케이스(PascalCase) (예: `StudyTimer.tsx`)
+  - **라우트 파일**: `app/` 내 페이지는 **소문자 + 하이픈** (예: `find-info.tsx`)
+- **한글 주석 필수**:
+  - 모든 함수/컴포넌트 상단에 **한글로 한 줄 요약**을 작성한다.
+  - 복잡한 로직은 **JSDoc 형식**을 활용해 한글로 의도/제약/엣지케이스를 설명한다.
+- **TypeScript**:
+  - `any` 사용을 금지하고, 인터페이스/타입을 명확히 정의한다.
+  - 단, **Expo Router 경로 타입 문제로 빌드/타입 에러가 발생하는 경우에 한해** 최소 범위로 `as any`를 허용한다.
+
+## 4. 에러 처리 및 디버깅
+- **서버 에러(Supabase/Gemini)**:
+  - API 호출 예외를 포착하고, 사용자에게 **한글로 친절한 안내**를 제공한다.
+  - 개발 환경(`__DEV__`)에서만 상세 로그를 남기고, 프로덕션에서는 민감 정보가 노출되지 않도록 한다.
+- **클라이언트 에러**:
+  - 앱 중단을 막기 위해 에러 바운더리/방어 코드를 고려한다.
+  - 실패 시에는 재시도/되돌아가기 등 사용자가 다음 행동을 할 수 있는 UI를 제공한다.
+
+## 5. 프로젝트 전용 주의사항 (CRITICAL)
+- **SDK 버전 호환 설치**: 라이브러리 추가 시 반드시 `npx expo install`을 사용한다.
+- **React Compiler**: `app.json` 설정에 따라 `reactCompiler: false` 상태를 유지하며, 관련 에러를 유발하는 설정/의존성 변경을 피한다.
+- **폴더 구조**:
+  - `app/` 내에서 인증(Login, Signup)과 메인 기능(`(tabs)`)을 명확히 분리한다.
+  - 라우팅 규칙(그룹, 레이아웃, 세그먼트)을 어기지 않도록 `app/` 구조를 우선으로 설계한다.
