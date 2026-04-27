@@ -1,52 +1,126 @@
-import React, { useMemo } from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from "react";
+import {
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-import { HomeHeader } from '@/components/home/HomeHeader';
-import { StudyGaugeCard } from '@/components/home/StudyGaugeCard';
-import { TodayClassList, TodayClassItem } from '@/components/home/TodayClassList';
-import { DdayCards, DdayItem } from '@/components/home/DdayCards';
+import { DdayCards, DdayItem } from "@/components/home/DdayCards";
+import { HomeHeader } from "@/components/home/HomeHeader";
+import { StudyGaugeCard } from "@/components/home/StudyGaugeCard";
+import {
+  TodayClassItem,
+  TodayClassList,
+} from "@/components/home/TodayClassList";
+import {
+  MOCK_DDAYS,
+  MOCK_STUDY_LOG,
+  MOCK_TIMETABLE,
+  MOCK_USER,
+  calculateDDay,
+  calculateWeeklyProgress,
+  formatCurrentDate,
+  formatStudyTime,
+  getTodayClasses,
+  isClassEnded,
+} from "@/types";
 
-// PRD 기반 Mock Data로 구성한 홈 화면
+// 홈 화면 (PRD 기반 인터페이스 + Mock Data 시스템)
 export default function Home() {
-  const todayText = '2026.03.12 (목)';
-  const userName = '김강남';
+  // 알림 상태 (true: 빨간 점 표시)
+  const [hasNotification] = useState(true);
 
-  const classes = useMemo<TodayClassItem[]>(
-    () => [
-      {
-        id: 'c1',
-        startTime: '10:30',
-        endTime: '12:00',
-        title: '데이터 구조 및 알고리즘',
-        meta: '공학관 402호 · 김철수 교수',
-        isActive: true,
-      },
-      {
-        id: 'c2',
-        startTime: '14:00',
-        endTime: '15:30',
-        title: '운영체제론',
-        meta: '온라인 강의 · 이영희 교수',
-        isActive: false,
-      },
-    ],
-    []
+  // 실시간 날짜 포맷
+  const todayText = useMemo(() => formatCurrentDate(), []);
+
+  // 사용자 정보
+  const userName = MOCK_USER.name;
+
+  // 오늘의 학습 시간 (초 단위 → HH:mm:ss 포맷)
+  const todayStudyTimeText = useMemo(
+    () => formatStudyTime(MOCK_STUDY_LOG.current_study_time),
+    [],
   );
 
-  const ddays = useMemo<DdayItem[]>(
-    () => [
-      { id: 'd1', typeLabel: '과제 마감', title: '알고리즘 구현', ddayText: 'D-2 남음' },
-      { id: 'd2', typeLabel: '시험 일정', title: '중간고사: OS', ddayText: 'D-12 남음' },
-    ],
-    []
+  // 주간 목표 달성률 계산
+  const weeklyProgressRatio = useMemo(
+    () =>
+      calculateWeeklyProgress(
+        MOCK_STUDY_LOG.weekly_total_time,
+        MOCK_USER.target_study_time,
+      ),
+    [],
   );
+
+  // 주간 목표 달성 텍스트 (예: 70%)
+  const weeklyProgressText = useMemo(
+    () => `주간 목표 ${Math.round(weeklyProgressRatio * 100)}% 달성`,
+    [weeklyProgressRatio],
+  );
+
+  // 주간 누적 시간 텍스트
+  const weeklyCurrentText = useMemo(
+    () => `이번 주 총 ${formatStudyTime(MOCK_STUDY_LOG.weekly_total_time)}`,
+    [],
+  );
+
+  // 주간 목표 시간 텍스트
+  const weeklyGoalText = useMemo(
+    () => `목표 ${MOCK_USER.target_study_time * 7}분`,
+    [],
+  );
+
+  // 오늘의 수업 필터링 (현재 요일과 일치하는 수업)
+  const classes = useMemo<TodayClassItem[]>(() => {
+    const todayClasses = getTodayClasses(MOCK_TIMETABLE);
+    return todayClasses.map((cls) => ({
+      id: cls.id,
+      startTime: cls.start_time,
+      endTime: cls.end_time,
+      title: cls.subject_name,
+      meta: `${cls.room} · ${cls.professor} 교수`,
+      isActive: !isClassEnded(cls.end_time),
+    }));
+  }, []);
+
+  // D-Day 계산 (남은 일수)
+  const ddays = useMemo<DdayItem[]>(() => {
+    // 남은 일수가 14일 이내인 항목만 필터링 (마감 임박)
+    const upcomingDDays = MOCK_DDAYS.filter((dd) => {
+      const dday = calculateDDay(dd.target_date);
+      return dday >= 0 && dday <= 14;
+    });
+
+    return upcomingDDays.map((dd) => {
+      const dday = calculateDDay(dd.target_date);
+      const ddayText =
+        dday === 0 ? "D-Day!" : dday > 0 ? `D-${dday} 남음` : "마감됨";
+      return {
+        id: dd.id,
+        typeLabel: dd.type === "과제" ? "과제 마감" : "시험 일정",
+        title: dd.title,
+        ddayText,
+      };
+    });
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
         <HomeHeader
-          onPressBell={() => Alert.alert('알림', '알림 화면은 추후 구현됩니다.')}
-          onPressProfile={() => Alert.alert('프로필', '프로필 화면은 추후 구현됩니다.')}
+          hasNotification={hasNotification}
+          onPressBell={() =>
+            Alert.alert("알림", "알림 화면은 추후 구현됩니다.")
+          }
+          onPressProfile={() =>
+            Alert.alert("프로필", "프로필 화면은 추후 구현됩니다.")
+          }
         />
 
         <View style={styles.greeting}>
@@ -58,12 +132,14 @@ export default function Home() {
 
         <View style={styles.sectionGap} />
         <StudyGaugeCard
-          todayStudyTimeText="04:25:12"
-          weeklyProgressText="주간 목표 70% 달성"
-          weeklyProgressRatio={0.7}
-          weeklyCurrentText="이번 주 총 28시간 40분"
-          weeklyGoalText="목표 40시간"
-          onPress={() => Alert.alert('학습 현황', '상세 화면은 추후 구현됩니다.')}
+          todayStudyTimeText={todayStudyTimeText}
+          weeklyProgressText={weeklyProgressText}
+          weeklyProgressRatio={weeklyProgressRatio}
+          weeklyCurrentText={weeklyCurrentText}
+          weeklyGoalText={weeklyGoalText}
+          onPress={() =>
+            Alert.alert("학습 현황", "상세 화면은 추후 구현됩니다.")
+          }
         />
 
         <View style={styles.sectionGapLg} />
@@ -72,12 +148,22 @@ export default function Home() {
           <Text style={styles.sectionLink}>전체보기</Text>
         </View>
         <View style={styles.sectionGapSm} />
-        <TodayClassList items={classes} onPressItem={() => Alert.alert('수업', '수업 상세는 추후 구현됩니다.')} />
+        <TodayClassList
+          items={classes}
+          onPressItem={() =>
+            Alert.alert("수업", "수업 상세는 추후 구현됩니다.")
+          }
+        />
 
         <View style={styles.sectionGapLg} />
         <Text style={styles.sectionTitle}>마감 임박</Text>
         <View style={styles.sectionGapSm} />
-        <DdayCards items={ddays} onPressItem={() => Alert.alert('D-Day', '상세 화면은 추후 구현됩니다.')} />
+        <DdayCards
+          items={ddays}
+          onPressItem={() =>
+            Alert.alert("D-Day", "상세 화면은 추후 구현됩니다.")
+          }
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -86,7 +172,7 @@ export default function Home() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   scroll: {
     paddingHorizontal: 18,
@@ -99,16 +185,16 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '700',
+    color: "#6B7280",
+    fontWeight: "700",
   },
   greetingText: {
     fontSize: 22,
-    color: '#111827',
-    fontWeight: '800',
+    color: "#111827",
+    fontWeight: "800",
   },
   greetingBold: {
-    fontWeight: '900',
+    fontWeight: "900",
   },
   sectionGap: {
     height: 12,
@@ -120,19 +206,18 @@ const styles = StyleSheet.create({
     height: 10,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   sectionTitle: {
     fontSize: 18,
-    color: '#111827',
-    fontWeight: '900',
+    color: "#111827",
+    fontWeight: "900",
   },
   sectionLink: {
     fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '800',
+    color: "#9CA3AF",
+    fontWeight: "800",
   },
 });
-
