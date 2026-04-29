@@ -1,407 +1,416 @@
-import FontAwesome from "@expo/vector-icons/FontAwesome";
-import React, { useMemo, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router"; // [추가] 페이지 이동을 위한 라우터
+import React, { useState } from "react";
 import {
-  Alert,
-  Pressable,
-  SafeAreaView,
+  DimensionValue,
+  FlatList,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useTimerStore } from "../../store/useTimerStore"; //
 
-import {
-  MOCK_TODOS,
-  Todo,
-  TODO_CATEGORIES,
-  TodoCategory,
-} from "@/constants/mockData";
+const HOUR_HEIGHT = 30;
+const HOURS = Array.from({ length: 24 }, (_, i) => (i + 9) % 24);
 
-// ============================================
-// 유틸리티 함수
-// ============================================
+// --- [1] 데이터 타입 정의 ---
+interface ITodo {
+  id: string;
+  subject: string;
+  completed: boolean;
+  color: string;
+}
 
-/** 날짜 포맷: YYYY-MM-DD → YYYY.MM.DD */
-const formatDateDisplay = (dateStr: string | undefined): string => {
-  if (!dateStr) return "";
-  return dateStr.replace(/-/g, ".");
-};
+interface ITimelineItem {
+  id: string;
+  subject: string;
+  startTime: string;
+  endTime: string;
+  color: string;
+}
 
-/** 카테고리 색상 반환 */
-const getCategoryColor = (category: string): string => {
-  switch (category) {
-    case "공부":
-      return "#3B82F6";
-    case "과제":
-      return "#F59E0B";
-    case "개인":
-      return "#10B981";
-    case "社团活动":
-      return "#8B5CF6";
-    default:
-      return "#6B7280";
-  }
-};
+const INITIAL_TODOS: ITodo[] = [
+  { id: "1", subject: "데이터베이스 실습", completed: false, color: "#FFD700" },
+  { id: "2", subject: "ICT 융합프로젝트", completed: false, color: "#8CE68C" },
+];
 
-// ============================================
-// Todo 아이템 컴포넌트
-// ============================================
+export default function StudyPlannerScreen() {
+  const router = useRouter(); // [추가] 라우터 초기화
+  const { seconds, isActive, start, pause } = useTimerStore(); //
 
-const TodoItem = ({
-  todo,
-  onToggle,
-  onPress,
-}: {
-  todo: Todo;
-  onToggle: (id: string) => void;
-  onPress: (id: string) => void;
-}) => {
-  const categoryColor = getCategoryColor(todo.category);
+  const [todos, setTodos] = useState<ITodo[]>(INITIAL_TODOS);
+  const [timeline, setTimeline] = useState<ITimelineItem[]>([]);
+  const [selectedTodo, setSelectedTodo] = useState<ITodo>(INITIAL_TODOS[0]);
+
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [newTodoTitle, setNewTodoTitle] = useState("");
+
+  // 시간 포맷팅
+  const formatTime = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const getTimeString = (date: Date) => {
+    return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+  };
+
+  // --- [수정] 공부 시작 시 이동 로직 ---
+  const handleStartStudy = () => {
+    start(); // 1. 타이머 시작[cite: 1]
+    // 2. 공부 현황 페이지로 이동 (as any로 타입 에러 방지)
+    router.push({
+      pathname: "/study-status" as any,
+      params: { subject: selectedTodo?.subject || "자율학습" },
+    });
+  };
+
+  // 타이머 중단 시 타임라인 기록 (기존 로직 유지)
+  const handleStopTimer = () => {
+    if (isActive && seconds > 10) {
+      const now = new Date();
+      const startTimeDate = new Date(now.getTime() - seconds * 1000);
+      const newEntry: ITimelineItem = {
+        id: Date.now().toString(),
+        subject: selectedTodo.subject,
+        startTime: getTimeString(startTimeDate),
+        endTime: getTimeString(now),
+        color: selectedTodo.color || "#0059A6",
+      };
+      setTimeline([...timeline, newEntry]);
+    }
+    pause(); //[cite: 1]
+  };
+
+  // 새로운 Todo 추가
+  const handleAddTodo = () => {
+    if (newTodoTitle.trim() === "") return;
+    const colors = ["#FFD700", "#8CE68C", "#87CEFA", "#FFA07A", "#DDA0DD"];
+    const newTodo: ITodo = {
+      id: Date.now().toString(),
+      subject: newTodoTitle,
+      completed: false,
+      color: colors[todos.length % colors.length],
+    };
+    setTodos([...todos, newTodo]);
+    setNewTodoTitle("");
+    setIsModalVisible(false);
+  };
+
+  // 가로 위치 및 너비 계산
+  const getLeftAndWidth = (startTime: string, endTime: string) => {
+    const startMin = Number(startTime.split(":")[1]);
+    const endMin = Number(endTime.split(":")[1]);
+
+    const left = `${(startMin / 60) * 100}%` as DimensionValue;
+    const width = `${((endMin - startMin) / 60) * 100}%` as DimensionValue;
+
+    return { left, width };
+  };
 
   return (
-    <Pressable onPress={() => onPress(todo.id)} style={styles.todoItem}>
-      <Pressable
-        onPress={() => onToggle(todo.id)}
-        hitSlop={10}
-        style={[styles.checkbox, todo.completed && styles.checkboxChecked]}
-      >
-        {todo.completed && (
-          <FontAwesome name="check" size={12} color="#FFFFFF" />
-        )}
-      </Pressable>
-
-      <View style={styles.todoContent}>
-        <Text
+    <SafeAreaView style={styles.container}>
+      {/* 상단: 타이머 영역 */}
+      <View style={styles.timerHeader}>
+        <View
           style={[
-            styles.todoTitle,
-            todo.completed && styles.todoTitleCompleted,
+            styles.subjectBadge,
+            { backgroundColor: (selectedTodo?.color || "#EEEEEE") + "33" },
           ]}
         >
-          {todo.title}
-        </Text>
-        {todo.description && (
-          <Text style={styles.todoDescription} numberOfLines={1}>
-            {todo.description}
-          </Text>
-        )}
-        <View style={styles.todoMeta}>
-          {todo.due_date && (
-            <View style={styles.dueDateBadge}>
-              <FontAwesome name="clock-o" size={10} color="#6B7280" />
-              <Text style={styles.dueDateText}>
-                {formatDateDisplay(todo.due_date)}
-              </Text>
-            </View>
-          )}
           <View
             style={[
-              styles.categoryBadge,
-              { backgroundColor: categoryColor + "20" },
+              styles.colorDot,
+              { backgroundColor: selectedTodo?.color || "#CCCCCC" },
             ]}
-          >
-            <Text style={[styles.categoryText, { color: categoryColor }]}>
-              {todo.category}
-            </Text>
-          </View>
-        </View>
-      </View>
-    </Pressable>
-  );
-};
-
-// ============================================
-// 메인 화면
-// ============================================
-
-export default function StudyPlanner() {
-  // 선택된 카테고리 필터
-  const [selectedCategory, setSelectedCategory] = useState<
-    TodoCategory | "전체"
-  >("전체");
-
-  // Todo 완료 상태 관리 (로컬 상태)
-  const [todos, setTodos] = useState<Todo[]>(MOCK_TODOS);
-
-  // 필터링된 Todo 목록
-  const filteredTodos = useMemo(() => {
-    if (selectedCategory === "전체") return todos;
-    return todos.filter((t) => t.category === selectedCategory);
-  }, [todos, selectedCategory]);
-
-  // 완료된 Todo 개수
-  const completedCount = useMemo(
-    () => todos.filter((t) => t.completed).length,
-    [todos],
-  );
-
-  // Todo 완료 토글
-  const handleToggleTodo = (id: string) => {
-    setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)),
-    );
-  };
-
-  // Todo 클릭
-  const handlePressTodo = (id: string) => {
-    const todo = todos.find((t) => t.id === id);
-    Alert.alert(todo?.title || "", "Todo 상세 화면은 추후 구현됩니다.");
-  };
-
-  // 카테고리 선택
-  const handleSelectCategory = (category: TodoCategory | "전체") => {
-    setSelectedCategory(category);
-  };
-
-  return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* 헤더 */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>스터디플래너</Text>
-          <Text style={styles.headerSubtitle}>
-            오늘의 할 일: {completedCount}/{todos.length} 완료
+          />
+          <Text style={styles.subjectLabel}>
+            {selectedTodo?.subject || "과목 선택"}
           </Text>
         </View>
 
-        {/* 진행률 바 */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${todos.length > 0 ? (completedCount / todos.length) * 100 : 0}%`,
-                },
-              ]}
+        <View style={styles.timerRow}>
+          <Text style={styles.mainTimeText}>{formatTime(seconds)}</Text>
+          <TouchableOpacity
+            style={[styles.playBtn, isActive && styles.pauseBtn]}
+            onPress={isActive ? handleStopTimer : handleStartStudy} // [수정] 이동 함수로 교체
+          >
+            <Ionicons
+              name={isActive ? "pause" : "play"}
+              size={28}
+              color="#FFF"
             />
-          </View>
+          </TouchableOpacity>
         </View>
+      </View>
 
-        {/* 카테고리 필터 칩 */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryContainer}
-        >
-          {["전체", ...TODO_CATEGORIES].map((cat) => (
-            <Pressable
-              key={cat}
-              onPress={() => handleSelectCategory(cat as TodoCategory | "전체")}
-              style={[
-                styles.categoryChip,
-                selectedCategory === cat && styles.categoryChipSelected,
-              ]}
-            >
-              <Text
+      {/* 중앙 레이아웃 */}
+      <View style={styles.mainLayout}>
+        {/* 좌측: TODO LIST */}
+        <View style={styles.todoContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>TODO LIST</Text>
+            <TouchableOpacity onPress={() => setIsModalVisible(true)}>
+              <Ionicons name="add-circle" size={24} color="#0059A6" />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={todos}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View
                 style={[
-                  styles.categoryChipText,
-                  selectedCategory === cat && styles.categoryChipTextSelected,
+                  styles.todoItem,
+                  selectedTodo?.id === item.id && styles.selectedTodo,
                 ]}
               >
-                {cat}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {/* Todo 리스트 */}
-        <View style={styles.todoList}>
-          {filteredTodos.length === 0 ? (
-            <View style={styles.emptyState}>
-              <FontAwesome name="check-circle-o" size={48} color="#D1D5DB" />
-              <Text style={styles.emptyText}>할 일이 없습니다</Text>
-            </View>
-          ) : (
-            filteredTodos.map((todo) => (
-              <TodoItem
-                key={todo.id}
-                todo={todo}
-                onToggle={handleToggleTodo}
-                onPress={handlePressTodo}
-              />
-            ))
-          )}
+                <TouchableOpacity
+                  onPress={() => setSelectedTodo(item)}
+                  style={styles.todoContent}
+                >
+                  <View
+                    style={[
+                      styles.todoColorBar,
+                      { backgroundColor: item.color },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.todoText,
+                      item.completed && styles.completedText,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.subject}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() =>
+                    setTodos(
+                      todos.map((t) =>
+                        t.id === item.id
+                          ? { ...t, completed: !t.completed }
+                          : t,
+                      ),
+                    )
+                  }
+                >
+                  <Ionicons
+                    name={item.completed ? "checkbox" : "square-outline"}
+                    size={20}
+                    color={item.completed ? "#AAA" : "#CCC"}
+                  />
+                </TouchableOpacity>
+              </View>
+            )}
+            showsVerticalScrollIndicator={false}
+          />
         </View>
-      </ScrollView>
 
-      {/* 플로팅 버튼 (FAB) */}
-      <Pressable
-        style={styles.fab}
-        onPress={() =>
-          Alert.alert("할 일 추가", "할 일 추가 화면은 추후 구현됩니다.")
-        }
-      >
-        <FontAwesome name="plus" size={24} color="#FFFFFF" />
-      </Pressable>
+        {/* 우측: TIME TABLE */}
+        <View style={styles.tableContainer}>
+          <Text style={styles.sectionTitle}>TIME TABLE</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.gridWrapper}>
+              {HOURS.map((hour) => (
+                <View key={hour} style={styles.hourRow}>
+                  <View style={styles.timeLabelBox}>
+                    <Text style={styles.timeLabelText}>
+                      {hour.toString().padStart(2, "0")}
+                    </Text>
+                  </View>
+
+                  <View style={styles.cellsRow}>
+                    {[0, 10, 20, 30, 40, 50].map((min) => (
+                      <View
+                        key={min}
+                        style={[styles.cell, min === 30 && styles.midLine]}
+                      />
+                    ))}
+
+                    {timeline
+                      .filter(
+                        (item) => Number(item.startTime.split(":")[0]) === hour,
+                      )
+                      .map((item) => {
+                        const { left, width } = getLeftAndWidth(
+                          item.startTime,
+                          item.endTime,
+                        );
+                        return (
+                          <View
+                            key={item.id}
+                            style={[
+                              styles.timeBlock,
+                              {
+                                left: left,
+                                width: width,
+                                backgroundColor: item.color + "A0",
+                              },
+                            ]}
+                          />
+                        );
+                      })}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+
+      {/* 할 일 추가 모달 */}
+      <Modal visible={isModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>새 할 일 추가</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="과목명 또는 할 일"
+              value={newTodoTitle}
+              onChangeText={setNewTodoTitle}
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                onPress={() => setIsModalVisible(false)}
+                style={styles.cancelBtn}
+              >
+                <Text>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleAddTodo} style={styles.saveBtn}>
+                <Text style={{ color: "#FFF" }}>추가</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-// ============================================
-// 스타일
-// ============================================
-
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
+  container: { flex: 1, backgroundColor: "#FFF" },
+  timerHeader: {
+    alignItems: "center",
+    paddingVertical: 10,
+    backgroundColor: "#FAFAFA",
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEE",
   },
-  scroll: {
-    paddingHorizontal: 18,
-    paddingTop: 8,
-    paddingBottom: 100,
-  },
-  header: {
-    marginBottom: 16,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#111827",
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#6B7280",
-    fontWeight: "700",
-    marginTop: 4,
-  },
-  progressContainer: {
-    marginBottom: 20,
-  },
-  progressTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#E5E7EB",
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 4,
-    backgroundColor: "#0059A6",
-  },
-  categoryContainer: {
+  subjectBadge: {
     flexDirection: "row",
-    gap: 8,
-    marginBottom: 20,
+    alignItems: "center",
+    paddingHorizontal: 10,
     paddingVertical: 4,
+    borderRadius: 15,
+    marginBottom: 5,
   },
-  categoryChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  categoryChipSelected: {
-    backgroundColor: "#0059A6",
-    borderColor: "#0059A6",
-  },
-  categoryChipText: {
-    fontSize: 13,
+  colorDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  subjectLabel: { fontSize: 13, color: "#555", fontWeight: "600" },
+  timerRow: { flexDirection: "row", alignItems: "center", gap: 15 },
+  mainTimeText: {
+    fontSize: 40,
     fontWeight: "800",
-    color: "#6B7280",
+    color: "#222",
+    letterSpacing: 1,
   },
-  categoryChipTextSelected: {
-    color: "#FFFFFF",
+  playBtn: {
+    backgroundColor: "#0059A6",
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  todoList: {
-    gap: 12,
+  pauseBtn: { backgroundColor: "#FF4D4D" },
+
+  mainLayout: { flex: 1, flexDirection: "row" },
+  todoContainer: {
+    flex: 1,
+    padding: 12,
+    borderRightWidth: 1,
+    borderRightColor: "#F0F0F0",
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#999",
+    marginBottom: 8,
   },
   todoItem: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#EEF2F7",
-    padding: 14,
-    gap: 12,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: "#D1D5DB",
     alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F9F9F9",
+  },
+  todoContent: { flex: 1, flexDirection: "row", alignItems: "center" },
+  selectedTodo: { backgroundColor: "#F0F7FF", borderRadius: 6 },
+  todoColorBar: { width: 3, height: 16, borderRadius: 2, marginRight: 8 },
+  todoText: { fontSize: 13, color: "#333" },
+  completedText: { color: "#AAA" },
+
+  tableContainer: { flex: 1.5, padding: 12 },
+  gridWrapper: { borderWidth: 1, borderColor: "#DDD", borderRadius: 2 },
+  hourRow: {
+    flexDirection: "row",
+    height: HOUR_HEIGHT,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  timeLabelBox: {
+    width: 30,
     justifyContent: "center",
+    alignItems: "center",
+    borderRightWidth: 1,
+    borderColor: "#DDD",
+    backgroundColor: "#F9F9F9",
   },
-  checkboxChecked: {
-    backgroundColor: "#10B981",
-    borderColor: "#10B981",
-  },
-  todoContent: {
+  timeLabelText: { fontSize: 10, fontWeight: "bold", color: "#666" },
+  cellsRow: {
     flex: 1,
-    gap: 6,
-  },
-  todoTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  todoTitleCompleted: {
-    textDecorationLine: "line-through",
-    color: "#9CA3AF",
-  },
-  todoDescription: {
-    fontSize: 13,
-    color: "#6B7280",
-    fontWeight: "600",
-  },
-  todoMeta: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 4,
+    position: "relative",
+    overflow: "hidden",
   },
-  dueDateBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  dueDateText: {
-    fontSize: 11,
-    color: "#6B7280",
-    fontWeight: "700",
-  },
-  categoryBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  emptyState: {
-    alignItems: "center",
+  cell: { flex: 1, borderRightWidth: 0.5, borderRightColor: "#EEE" },
+  midLine: { borderRightWidth: 1, borderRightColor: "#DDD" },
+  timeBlock: { position: "absolute", height: "100%", top: 0 },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
-    paddingVertical: 60,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#9CA3AF",
-    fontWeight: "700",
-  },
-  fab: {
-    position: "absolute",
-    right: 20,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#0059A6",
     alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
   },
+  modalContent: {
+    width: "80%",
+    backgroundColor: "#FFF",
+    borderRadius: 15,
+    padding: 20,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 15 },
+  input: {
+    backgroundColor: "#F5F5F5",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+  },
+  modalButtons: { flexDirection: "row", justifyContent: "flex-end", gap: 10 },
+  cancelBtn: { padding: 10, borderRadius: 8, backgroundColor: "#EEE" },
+  saveBtn: { padding: 10, borderRadius: 8, backgroundColor: "#0059A6" },
 });

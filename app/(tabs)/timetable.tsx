@@ -1,386 +1,357 @@
-import FontAwesome from "@expo/vector-icons/FontAwesome";
-import React, { useMemo, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import React, { useState } from "react";
 import {
-  Pressable,
-  SafeAreaView,
+  Alert,
+  Dimensions,
+  FlatList,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { MOCK_TIMETABLE, Timetable } from "@/types";
+const { width } = Dimensions.get("window");
+const COLUMN_WIDTH = (width - 55) / 5;
 
-// ============================================
-// 타입 별칭 (Timetable 타입을 easier하게 사용하기 위해)
-// ============================================
-
-type TimetableData = Timetable;
-
-// ============================================
-// 유틸리티 함수
-// ============================================
-
-/** 시간대 배열 (1~8교시) */
-const TIME_SLOTS = ["1", "2", "3", "4", "5", "6", "7", "8"];
-
-/** 요일 배열 (0=일, 1=월, ..., 5=금) */
 const DAYS = ["월", "화", "수", "목", "금"];
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 9);
 
-/** day_of_week를 요일 문자열로 변환 */
-const getDayString = (dayOfWeek: number): string => {
-  const dayMap: Record<number, string> = {
-    1: "월",
-    2: "화",
-    3: "수",
-    4: "목",
-    5: "금",
-  };
-  return dayMap[dayOfWeek] || "";
-};
+// 학기 리스트
+const SEMESTERS = ["2026년 1학기", "2025년 2학기", "2025년 1학기"];
 
-/** 시간대별 시간 문자열 반환 */
-const getTimeString = (period: string): string => {
-  const timeMap: Record<string, string> = {
-    "1": "09:00",
-    "2": "09:50",
-    "3": "10:40",
-    "4": "11:30",
-    "5": "12:20",
-    "6": "13:10",
-    "7": "14:00",
-    "8": "14:50",
-  };
-  return timeMap[period] || "";
-};
+export default function TimetableScreen() {
+  const [selectedSemester, setSelectedSemester] = useState(SEMESTERS[0]);
+  const [isSemesterModal, setIsSemesterModal] = useState(false);
+  const [isManualModal, setIsManualModal] = useState(false);
+  const [isAIModal, setIsAIModal] = useState(false);
 
-/** start_time을 기반으로 교시 계산 */
-const getPeriodFromTime = (startTime: string): string => {
-  const timeToPeriod: Record<string, string> = {
-    "09:00": "1",
-    "09:50": "2",
-    "10:40": "3",
-    "11:30": "4",
-    "12:20": "5",
-    "13:10": "6",
-    "14:00": "7",
-    "14:50": "8",
-  };
-  return timeToPeriod[startTime] || "";
-};
+  // 학기별 예시 데이터 (실제로는 학기에 따라 filteredClasses를 만들면 돼)
+  const [classes, setClasses] = useState([
+    {
+      id: "1",
+      title: "데이터베이스",
+      day: "화",
+      start: 9,
+      duration: 2.5,
+      color: "#FF6B6B",
+    },
+    {
+      id: "2",
+      title: "알고리즘",
+      day: "목",
+      start: 13,
+      duration: 3,
+      color: "#4D96FF",
+    },
+  ]);
 
-// ============================================
-// 시간표 셀 컴포넌트
-// ============================================
+  const renderClasses = () => {
+    return classes.map((item) => {
+      const dayIndex = DAYS.indexOf(item.day);
+      const topOffset = (item.start - 9) * 60;
+      const height = item.duration * 60;
 
-const TimetableCell = ({
-  entry,
-  onPress,
-}: {
-  entry: TimetableData | null;
-  onPress: (entry: TimetableData) => void;
-}) => {
-  if (!entry) {
-    return <View style={styles.emptyCell} />;
-  }
-
-  return (
-    <Pressable
-      onPress={() => onPress(entry)}
-      style={[styles.classCell, { backgroundColor: "#3B82F6" }]}
-    >
-      <Text style={styles.className} numberOfLines={2}>
-        {entry.subject_name}
-      </Text>
-      <Text style={styles.classLocation} numberOfLines={1}>
-        {entry.room}
-      </Text>
-    </Pressable>
-  );
-};
-
-// ============================================
-// 메인 화면 (TimetableScreen)
-// ============================================
-
-const TimetableScreen = () => {
-  // 선택된 주 (0: 현재 주, -1: 이전 주, 1: 다음 주)
-  const [weekOffset, setWeekOffset] = useState(0);
-
-  // 시간표 데이터 가공 (Timetable[] → 2차원 배열)
-  const timetableData = useMemo(() => {
-    // 2차원 배열: [dayIndex][periodIndex]
-    const grid: (TimetableData | null)[][] = DAYS.map(() =>
-      TIME_SLOTS.map(() => null),
-    );
-
-    MOCK_TIMETABLE.forEach((entry) => {
-      const dayStr = getDayString(entry.day_of_week);
-      const dayIndex = DAYS.indexOf(dayStr);
-      const period = getPeriodFromTime(entry.start_time);
-      const periodIndex = TIME_SLOTS.indexOf(period);
-
-      if (dayIndex >= 0 && periodIndex >= 0) {
-        grid[dayIndex][periodIndex] = entry;
-      }
+      return (
+        <TouchableOpacity
+          key={item.id}
+          style={[
+            styles.classBlock,
+            {
+              top: topOffset,
+              left: 35 + dayIndex * COLUMN_WIDTH,
+              width: COLUMN_WIDTH - 2,
+              height: height,
+              backgroundColor: item.color,
+            },
+          ]}
+        >
+          <Text style={styles.classTitle}>{item.title}</Text>
+          <Text style={styles.classTimeText}>{item.duration}h</Text>
+        </TouchableOpacity>
+      );
     });
-
-    return grid;
-  }, []);
-
-  // 주간 정보 계산
-  const weekInfo = useMemo(() => {
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay() + 1 + weekOffset * 7); // 월요일 기준
-
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 4); // 금요일
-
-    const formatDate = (d: Date) => {
-      const month = d.getMonth() + 1;
-      const date = d.getDate();
-      return `${month}.${date}`;
-    };
-
-    return {
-      start: formatDate(startOfWeek),
-      end: formatDate(endOfWeek),
-      year: startOfWeek.getFullYear(),
-    };
-  }, [weekOffset]);
-
-  // 수업 클릭
-  const handlePressClass = (entry: TimetableData) => {
-    // 추후 상세 화면 구현
-  };
-
-  // 이전 주 이동
-  const handlePrevWeek = () => {
-    setWeekOffset((prev) => prev - 1);
-  };
-
-  // 다음 주 이동
-  const handleNextWeek = () => {
-    setWeekOffset((prev) => prev + 1);
-  };
-
-  // 오늘로 이동
-  const handleGoToToday = () => {
-    setWeekOffset(0);
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* 헤더 */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>시간표</Text>
-        </View>
-
-        {/* 주간 네비게이션 */}
-        <View style={styles.weekNav}>
-          <Pressable
-            onPress={handlePrevWeek}
-            hitSlop={10}
-            style={styles.navButton}
+    <SafeAreaView style={styles.container}>
+      {/* 상단 헤더 및 학기 선택 */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.univTitle}>강남대학교</Text>
+          <TouchableOpacity
+            style={styles.semesterSelector}
+            onPress={() => setIsSemesterModal(true)}
           >
-            <FontAwesome name="chevron-left" size={16} color="#6B7280" />
-          </Pressable>
-
-          <Pressable onPress={handleGoToToday} style={styles.weekInfo}>
-            <Text style={styles.weekText}>
-              {weekInfo.year}년 {weekInfo.start} ~ {weekInfo.end}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={handleNextWeek}
-            hitSlop={10}
-            style={styles.navButton}
-          >
-            <FontAwesome name="chevron-right" size={16} color="#6B7280" />
-          </Pressable>
+            <Text style={styles.semesterText}>{selectedSemester}</Text>
+            <Ionicons name="chevron-down" size={18} color="#333" />
+          </TouchableOpacity>
         </View>
+        <View style={styles.headerIcons}>
+          <TouchableOpacity
+            onPress={() => setIsAIModal(true)}
+            style={styles.aiBadge}
+          >
+            <Ionicons name="scan-outline" size={18} color="#0059A6" />
+            <Text style={styles.aiBadgeText}>AI 등록</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setIsManualModal(true)}>
+            <Ionicons name="add" size={30} color="#333" />
+          </TouchableOpacity>
+        </View>
+      </View>
 
-        {/* 시간표 그리드 */}
-        <View style={styles.timetableGrid}>
-          {/* 요일 헤더 행 */}
-          <View style={styles.headerRow}>
-            <View style={styles.timeColumn} />
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={styles.timetableContainer}>
+          <View style={styles.dayRow}>
+            <View style={{ width: 35 }} />
             {DAYS.map((day) => (
-              <View key={day} style={styles.dayHeader}>
+              <View key={day} style={styles.dayLabel}>
                 <Text style={styles.dayText}>{day}</Text>
               </View>
             ))}
           </View>
 
-          {/* 시간대별 행 */}
-          {TIME_SLOTS.map((period, periodIndex) => (
-            <View key={period} style={styles.timeRow}>
-              {/* 시간 열 */}
-              <View style={styles.timeColumn}>
-                <Text style={styles.periodText}>{period}</Text>
-                <Text style={styles.timeText}>{getTimeString(period)}</Text>
+          <View style={styles.gridWrapper}>
+            {HOURS.map((hour) => (
+              <View key={hour} style={styles.hourRow}>
+                <Text style={styles.hourLabel}>{hour}</Text>
+                <View style={styles.hourLine} />
               </View>
-
-              {/* 요일별 셀 */}
-              {DAYS.map((_, dayIndex) => (
-                <TimetableCell
-                  key={`${dayIndex}-${periodIndex}`}
-                  entry={timetableData[dayIndex][periodIndex]}
-                  onPress={handlePressClass}
-                />
-              ))}
-            </View>
-          ))}
-        </View>
-
-        {/* 도움말 */}
-        <View style={styles.helpContainer}>
-          <FontAwesome name="info-circle" size={14} color="#9CA3AF" />
-          <Text style={styles.helpText}>
-            수업을 클릭하면 상세 정보가 표시됩니다
-          </Text>
+            ))}
+            {renderClasses()}
+          </View>
         </View>
       </ScrollView>
+
+      {/* 학기 선택 모달 */}
+      <Modal visible={isSemesterModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.semesterModalContent}>
+            <Text style={styles.modalTitle}>학기 선택</Text>
+            <FlatList
+              data={SEMESTERS}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.semesterItem}
+                  onPress={() => {
+                    setSelectedSemester(item);
+                    setIsSemesterModal(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.semesterItemText,
+                      selectedSemester === item && styles.activeSemesterText,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                  {selectedSemester === item && (
+                    <Ionicons name="checkmark" size={20} color="#0059A6" />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={() => setIsSemesterModal(false)}
+            >
+              <Text>취소</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 수동 추가 모달 (기존과 동일) */}
+      <Modal visible={isManualModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>과목 직접 추가</Text>
+            <TextInput style={styles.input} placeholder="과목명" />
+            <TextInput style={styles.input} placeholder="요일 (예: 월)" />
+            <TextInput
+              style={styles.input}
+              placeholder="시작 시간 (예: 9)"
+              keyboardType="numeric"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="강의 시간 (예: 2.5)"
+              keyboardType="numeric"
+            />
+            <View style={styles.modalBtns}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setIsManualModal(false)}
+              >
+                <Text>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmBtn}
+                onPress={() => setIsManualModal(false)}
+              >
+                <Text style={{ color: "#FFF" }}>추가</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* AI 등록 모달 (기존과 동일) */}
+      <Modal visible={isAIModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.aiModalContent}>
+            <Ionicons name="image-outline" size={50} color="#0059A6" />
+            <Text style={styles.aiModalTitle}>AI 시간표 인식</Text>
+            <TouchableOpacity
+              style={styles.uploadBox}
+              onPress={() => Alert.alert("알림", "이미지 선택창이 열립니다.")}
+            >
+              <Ionicons name="camera" size={30} color="#999" />
+              <Text style={{ color: "#999", marginTop: 5 }}>이미지 업로드</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={() => setIsAIModal(false)}
+            >
+              <Text>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
-};
-
-// ============================================
-// 스타일
-// ============================================
+}
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  scroll: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 24,
-  },
+  container: { flex: 1, backgroundColor: "#FFF" },
   header: {
-    marginBottom: 12,
-    paddingHorizontal: 6,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#111827",
-  },
-  weekNav: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#EEF2F7",
-  },
-  navButton: {
-    padding: 8,
-  },
-  weekInfo: {
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-  },
-  weekText: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  timetableGrid: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#EEF2F7",
-    overflow: "hidden",
-  },
-  headerRow: {
-    flexDirection: "row",
-    backgroundColor: "#F3F4F6",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
-  },
-  timeColumn: {
-    width: 44,
     alignItems: "center",
-    paddingVertical: 8,
-  },
-  dayHeader: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  dayText: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#374151",
-  },
-  timeRow: {
-    flexDirection: "row",
+    padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-    minHeight: 52,
+    borderBottomColor: "#EEE",
   },
-  periodText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#6B7280",
-  },
-  timeText: {
-    fontSize: 9,
-    color: "#9CA3AF",
-    fontWeight: "600",
+  univTitle: { fontSize: 12, color: "#666", fontWeight: "bold" },
+  semesterSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     marginTop: 2,
   },
-  emptyCell: {
-    flex: 1,
-    minHeight: 52,
-    borderLeftWidth: 1,
-    borderLeftColor: "#F3F4F6",
-  },
-  classCell: {
-    flex: 1,
-    minHeight: 52,
-    borderLeftWidth: 1,
-    borderLeftColor: "#F3F4F6",
-    paddingHorizontal: 4,
-    paddingVertical: 6,
-    justifyContent: "center",
-    gap: 2,
-  },
-  className: {
-    fontSize: 10,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    lineHeight: 12,
-  },
-  classLocation: {
-    fontSize: 9,
-    color: "rgba(255,255,255,0.8)",
-    fontWeight: "700",
-  },
-  helpContainer: {
+  semesterText: { fontSize: 20, fontWeight: "bold", color: "#111" },
+  headerIcons: { flexDirection: "row", alignItems: "center", gap: 12 },
+  aiBadge: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    marginTop: 16,
-    paddingVertical: 12,
+    backgroundColor: "#E6F0FF",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
   },
-  helpText: {
-    fontSize: 12,
-    color: "#9CA3AF",
-    fontWeight: "600",
+  aiBadgeText: { color: "#0059A6", fontSize: 12, fontWeight: "bold" },
+
+  timetableContainer: { padding: 10 },
+  dayRow: { flexDirection: "row", marginBottom: 10 },
+  dayLabel: { flex: 1, alignItems: "center" },
+  dayText: { fontWeight: "bold", color: "#666", fontSize: 13 },
+  gridWrapper: { position: "relative", height: 12 * 60 },
+  hourRow: { flexDirection: "row", height: 60, alignItems: "flex-start" },
+  hourLabel: { width: 35, fontSize: 12, color: "#AAA", textAlign: "center" },
+  hourLine: { flex: 1, height: 1, backgroundColor: "#F0F0F0", marginTop: 8 },
+
+  classBlock: {
+    position: "absolute",
+    borderRadius: 4,
+    padding: 5,
+    borderLeftWidth: 3,
+    borderLeftColor: "rgba(0,0,0,0.1)",
+  },
+  classTitle: { color: "#FFF", fontSize: 11, fontWeight: "bold" },
+  classTimeText: { color: "#FFF", fontSize: 9, opacity: 0.8 },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  semesterModalContent: {
+    width: "80%",
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 20,
+    maxHeight: "50%",
+  },
+  semesterItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F5F5F5",
+  },
+  semesterItemText: { fontSize: 16, color: "#333" },
+  activeSemesterText: { color: "#0059A6", fontWeight: "bold" },
+
+  modalContent: {
+    width: "85%",
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 25,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  input: {
+    backgroundColor: "#F5F5F5",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  modalBtns: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 10,
+  },
+  cancelBtn: { padding: 10 },
+  confirmBtn: {
+    backgroundColor: "#0059A6",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  closeBtn: { marginTop: 15, alignItems: "center", padding: 10 },
+
+  aiModalContent: {
+    width: "85%",
+    backgroundColor: "#FFF",
+    borderRadius: 25,
+    padding: 30,
+    alignItems: "center",
+  },
+  aiModalTitle: { fontSize: 18, fontWeight: "bold", marginTop: 10 },
+  uploadBox: {
+    width: "100%",
+    height: 150,
+    backgroundColor: "#F9F9F9",
+    borderRadius: 15,
+    borderStyle: "dashed",
+    borderWidth: 1.5,
+    borderColor: "#DDD",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 20,
   },
 });
