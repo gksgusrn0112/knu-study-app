@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 // [추가] 전역 타이머 스토어 가져오기
-import { useTimerStore } from "../store/useTimerStore";
+import { useTimerStore } from "../src/store/useTimerStore";
 
 const MY_TIMETABLE = [
   { id: "1", title: "통계와 사회" },

@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTimerStore } from "../../store/useTimerStore"; //
+import { useTimerStore } from "../../src/store/useTimerStore"; //
 
 const HOUR_HEIGHT = 30;
 const HOURS = Array.from({ length: 24 }, (_, i) => (i + 9) % 24);

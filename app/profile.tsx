@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useThemeStore } from "../store/useThemeStore"; // 💡 전역 상태 사용
+import { useThemeStore } from "../src/store/useThemeStore"; // 💡 전역 상태 사용
 
 export default function ProfileScreen() {
   const router = useRouter();

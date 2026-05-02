@@ -1,6 +1,7 @@
+import { testConnection } from "@/src/services/testService";
 import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   DimensionValue,
   Image,
@@ -12,8 +13,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 // 💡 한 단계 더 깊어졌으니 ../../ 로 경로 수정
-import { useThemeStore } from "../../store/useThemeStore";
-import { useTimerStore } from "../../store/useTimerStore";
+import { useThemeStore } from "../../src/store/useThemeStore";
+import { useTimerStore } from "../../src/store/useTimerStore";
 
 const CALENDAR_SCHEDULES = [
   { id: "1", title: "SQLD 보수교육", date: "2026-05-09", color: "#FF4D4D" },
@@ -64,6 +65,10 @@ export default function HomeScreen() {
     const s = secs % 60;
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
+
+  useEffect(() => {
+    testConnection();
+  }, []);
 
   const calculateDDay = (targetDate: string) => {
     const today = new Date();
